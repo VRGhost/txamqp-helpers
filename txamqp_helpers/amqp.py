@@ -26,6 +26,9 @@ import txamqp
 
 class AmqpProtocol(AMQClient):
     """The protocol is created and destroyed each time a connection is created and lost."""
+    def __init__(self, delegate, vhost, spec, prefetch_count):
+        AMQClient.__init__(self, delegate, vhost, spec)
+        self.prefetch_count = prefetch_count
 
     def connectionMade(self):
         """Called when a connection has been made."""
@@ -58,16 +61,20 @@ class AmqpProtocol(AMQClient):
         d.addCallback(self._channel_open)
         d.addErrback(self._channel_open_failed)
 
-
+    @inlineCallbacks
     def _channel_open(self, arg):
         """Called when the channel is open."""
 
         # Flag that the connection is open.
         self.connected = True
 
+        #Limit number of messages to get
+        if self.prefetch_count:
+            yield self.chan.basic_qos(prefetch_count=self.prefetch_count)
+
         # Now that the channel is open add any readers the user has specified.
         for l in self.factory.read_list:
-            self.setup_read(l[0], l[1], l[2], l[3])
+            self.setup_read(*l)
 
         # Send any messages waiting to be sent.
         self.send()
@@ -77,12 +84,11 @@ class AmqpProtocol(AMQClient):
             self.factory.deferred.callback(self)
             self.factory.initial_deferred_fired = True
 
-
-    def read(self, exchange, routing_key, callback, queue=None):
+    def read(self, exchange, routing_key, callback, queue=None, no_ack=None):
         """Add an exchange to the list of exchanges to read from."""
         if self.connected:
             # Connection is already up. Add the reader.
-            self.setup_read(exchange, routing_key, callback, queue)
+            self.setup_read(exchange, routing_key, callback, queue, no_ack)
         else:
             # Connection is not up. _channel_open will add the reader when the
             # connection is up.
@@ -99,7 +105,7 @@ class AmqpProtocol(AMQClient):
 
     # Do all the work that configures a listener.
     @inlineCallbacks
-    def setup_read(self, exchange, routing_key, callback, queue=None):
+    def setup_read(self, exchange, routing_key, callback, queue=None, no_ack=True):
         """This function does the work to read from an exchange."""
         if not queue:
             queue = exchange # Use the exchange name as the queue name by default.
@@ -113,14 +119,13 @@ class AmqpProtocol(AMQClient):
         yield self.chan.queue_bind(queue=queue, exchange=exchange, routing_key=routing_key)
 
         # Consume.
-        yield self.chan.basic_consume(queue=queue, no_ack=True, consumer_tag=consumer_tag)
+        yield self.chan.basic_consume(queue=queue, no_ack=no_ack, consumer_tag=consumer_tag)
         queue = yield self.queue(consumer_tag)
 
         # Now setup the readers.
         d = queue.get()
-        d.addCallback(self._read_item, queue, callback)
+        d.addCallback(self._read_item, queue, callback, no_ack)
         d.addErrback(self._read_item_err)
-
 
     def _channel_open_failed(self, error):
         print "Channel open failed:", error
@@ -149,16 +154,18 @@ class AmqpProtocol(AMQClient):
     def _send_message_err(self, error):
         print "Sending message failed", error
 
-
-    def _read_item(self, item, queue, callback):
+    @inlineCallbacks
+    def _read_item(self, item, queue, callback, no_ack):
         """Callback function which is called when an item is read."""
         # Setup another read of this queue.
         d = queue.get()
-        d.addCallback(self._read_item, queue, callback)
+        d.addCallback(self._read_item, queue, callback, no_ack)
         d.addErrback(self._read_item_err)
 
         # Process the read item by running the callback.
-        callback(item)
+        yield callback(item)
+        if not no_ack:
+            yield self.chan.basic_ack(item.delivery_tag)
 
 
     def _read_item_err(self, error):
@@ -169,7 +176,7 @@ class AmqpFactory(protocol.ReconnectingClientFactory):
     protocol = AmqpProtocol
 
 
-    def __init__(self, spec_file=None, vhost=None, host=None, port=None, user=None, password=None):
+    def __init__(self, spec_file=None, vhost=None, host=None, port=None, user=None, password=None, prefetch_count=None):
         spec_file = spec_file or 'amqp0-8.xml'
         self.spec = txamqp.spec.load(spec_file)
         self.user = user or 'guest'
@@ -180,6 +187,7 @@ class AmqpFactory(protocol.ReconnectingClientFactory):
         self.delegate = TwistedDelegate()
         self.deferred = Deferred()
         self.initial_deferred_fired = False
+        self.prefetch_count = prefetch_count
 
         self.p = None # The protocol instance.
         self.client = None # Alias for protocol instance
@@ -192,7 +200,7 @@ class AmqpFactory(protocol.ReconnectingClientFactory):
 
 
     def buildProtocol(self, addr):
-        p = self.protocol(self.delegate, self.vhost, self.spec)
+        p = self.protocol(self.delegate, self.vhost, self.spec, self.prefetch_count)
         p.factory = self # Tell the protocol about this factory.
 
         self.p = p # Store the protocol.
@@ -226,13 +234,13 @@ class AmqpFactory(protocol.ReconnectingClientFactory):
             self.p.send()
 
 
-    def read(self, exchange=None, routing_key=None, callback=None, queue=None):
+    def read(self, exchange=None, routing_key=None, callback=None, queue=None, no_ack=True):
         """Configure an exchange to be read from."""
         assert(exchange != None and routing_key != None and callback != None)
 
         # Add this to the read list so that we have it to re-add if we lose the connection.
-        self.read_list.append((exchange, routing_key, callback, queue))
+        self.read_list.append((exchange, routing_key, callback, queue, no_ack))
 
         # Tell the protocol to read this if it is already connected.
         if self.p != None:
-            self.p.read(exchange, routing_key, callback, queue)
+            self.p.read(exchange, routing_key, callback, queue, no_ack)
