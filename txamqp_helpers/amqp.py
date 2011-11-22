@@ -67,7 +67,7 @@ class AmqpProtocol(AMQClient):
 
         # Now that the channel is open add any readers the user has specified.
         for l in self.factory.read_list:
-            self.setup_read(l[0], l[1], l[2])
+            self.setup_read(l[0], l[1], l[2], l[3])
 
         # Send any messages waiting to be sent.
         self.send()
@@ -78,11 +78,11 @@ class AmqpProtocol(AMQClient):
             self.factory.initial_deferred_fired = True
 
 
-    def read(self, exchange, routing_key, callback):
+    def read(self, exchange, routing_key, callback, queue=None):
         """Add an exchange to the list of exchanges to read from."""
         if self.connected:
             # Connection is already up. Add the reader.
-            self.setup_read(exchange, routing_key, callback)
+            self.setup_read(exchange, routing_key, callback, queue)
         else:
             # Connection is not up. _channel_open will add the reader when the
             # connection is up.
@@ -99,9 +99,10 @@ class AmqpProtocol(AMQClient):
 
     # Do all the work that configures a listener.
     @inlineCallbacks
-    def setup_read(self, exchange, routing_key, callback):
+    def setup_read(self, exchange, routing_key, callback, queue=None):
         """This function does the work to read from an exchange."""
-        queue = exchange # For now use the exchange name as the queue name.
+        if not queue:
+            queue = exchange # Use the exchange name as the queue name by default.
         consumer_tag = exchange # Use the exchange name for the consumer tag for now.
 
         # Declare the exchange in case it doesn't exist.
@@ -205,14 +206,14 @@ class AmqpFactory(protocol.ReconnectingClientFactory):
 
     def clientConnectionFailed(self, connector, reason):
         print "Connection failed."
-        protocol.ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
+        protocol.ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
 
 
     def clientConnectionLost(self, connector, reason):
         print "Client connection lost."
         self.p = None
 
-        protocol.ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
+        protocol.ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
 
     def send_message(self, exchange=None, routing_key=None, msg=None):
@@ -225,13 +226,13 @@ class AmqpFactory(protocol.ReconnectingClientFactory):
             self.p.send()
 
 
-    def read(self, exchange=None, routing_key=None, callback=None):
+    def read(self, exchange=None, routing_key=None, callback=None, queue=None):
         """Configure an exchange to be read from."""
         assert(exchange != None and routing_key != None and callback != None)
 
         # Add this to the read list so that we have it to re-add if we lose the connection.
-        self.read_list.append((exchange, routing_key, callback))
+        self.read_list.append((exchange, routing_key, callback, queue))
 
         # Tell the protocol to read this if it is already connected.
         if self.p != None:
-            self.p.read(exchange, routing_key, callback)
+            self.p.read(exchange, routing_key, callback, queue)
