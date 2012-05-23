@@ -4,7 +4,8 @@
 # PROJECT: txAMQP Helpers
 # DESCRIPTION: Utility classes for making txAMQP easier to work 
 #              with. Code from Dan Siemon...just packaged into 
-#              a Python package.
+#              a Python package. Full history at
+#              https://github.com/mattbennett/txamqp-helpers
 # 
 #   License & Attribution:
 #
@@ -24,7 +25,7 @@
 
 from setuptools import setup, find_packages
  
-version = '0.5'
+version = '0.6'
  
 setup(name='txamqp-helpers',
       version=version,
@@ -32,10 +33,8 @@ setup(name='txamqp-helpers',
       long_description="""Utility classes for making txAMQP easier to work with.""",
       classifiers=[],
       keywords='',
-      author='Jason Williams/Dan Siemon',
-      author_email='jasonjwwilliams@gmail.com',
-      url='https://github.com/williamsjj/txamqp-helpers',
-      download_url='https://github.com/williamsjj/txamqp-helpers/zipball/v0.5',
+      author='Matt Bennnett / Jason Williams / Dan Siemon',
+      url='https://github.com/mattbennett/txamqp-helpers',
       license='Apache 2.0',
       packages=find_packages(exclude=['ez_setup', 'examples', 'tests', 'old*']),
       zip_safe=False,
