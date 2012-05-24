@@ -38,8 +38,8 @@ queue_defaults = {
 
 class AMQPProtocol(AMQClient):
     """The protocol is created and destroyed each time a connection is created and lost."""
-    def __init__(self, delegate, vhost, spec, prefetch_count):
-        AMQClient.__init__(self, delegate, vhost, spec)
+    def __init__(self, delegate, vhost, spec, prefetch_count, heartbeat=0, clock=None, insist=False):
+        AMQClient.__init__(self, delegate, vhost, spec, heartbeat, clock, insist)
         self.prefetch_count = prefetch_count
 
     def get_consumer_tag(self):
