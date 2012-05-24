@@ -260,8 +260,10 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
         protocol.ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
 
-    def send_message(self, exchange=None, routing_key=None, msg=None, delivery_mode=2, immediate=False, mandatory=False):
+    def send_message(self, exchange=None, msg=None, routing_key="", delivery_mode=2, immediate=False, mandatory=False):
         """Send a message."""
+        assert(exchange != None and msg != None)
+        
         # Create a deferred to fire when the send completes
         sent = defer.Deferred()
         
