@@ -15,7 +15,7 @@
 # under the License.
 #
 ##
-from twisted.internet import reactor, protocol
+from twisted.internet import reactor, defer, protocol
 from twisted.internet.defer import inlineCallbacks, Deferred
 
 from txamqp.protocol import AMQClient
@@ -112,7 +112,7 @@ class AMQPProtocol(AMQClient):
         if self.connected:
             while len(self.factory.queued_messages) > 0:
                 m = self.factory.queued_messages.pop(0)
-                self._send_message(m[0], m[1], m[2])
+                self._send_message(*m)
 
 
     # Do all the work that configures a listener.
@@ -168,7 +168,7 @@ class AMQPProtocol(AMQClient):
 
 
     @inlineCallbacks
-    def _send_message(self, exchange, routing_key, msg):
+    def _send_message(self, exchange, routing_key, msg, delivery_mode, immediate, mandatory, callback):
         """Send a single message."""
         # First declare the exchange just in case it doesn't exist.
         exchange_cfg = dict(exchange_defaults)
@@ -179,9 +179,12 @@ class AMQPProtocol(AMQClient):
         yield self.chan.exchange_declare(**exchange_cfg)
 
         msg = Content(msg)
-        msg["delivery mode"] = 2 # 2 = persistent delivery.
-        d = self.chan.basic_publish(exchange=exchange_cfg['exchange'], routing_key=routing_key, content=msg)
+        msg["delivery mode"] = delivery_mode
+        d = self.chan.basic_publish(exchange=exchange_cfg['exchange'], routing_key=routing_key, content=msg, immediate=immediate, mandatory=mandatory)
         d.addErrback(self._send_message_err)
+
+        # Chain result onto callback
+        d.chainDeferred(callback)
 
 
     def _send_message_err(self, error):
@@ -257,14 +260,19 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
         protocol.ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
 
 
-    def send_message(self, exchange=None, routing_key=None, msg=None):
+    def send_message(self, exchange=None, routing_key=None, msg=None, delivery_mode=2, immediate=False, mandatory=False):
         """Send a message."""
+        # Create a deferred to fire when the send completes
+        sent = defer.Deferred()
+        
         # Add the new message to the queue.
-        self.queued_messages.append((exchange, routing_key, msg))
+        self.queued_messages.append((exchange, routing_key, msg, delivery_mode, immediate, mandatory, sent))
 
         # This tells the protocol to send all queued messages.
         if self.p != None:
             self.p.send()
+
+        return sent
 
 
     def read(self, exchange=None, routing_key=None, callback=None, queue=None, no_ack=True):
