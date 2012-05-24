@@ -42,6 +42,13 @@ class AMQPProtocol(AMQClient):
         AMQClient.__init__(self, delegate, vhost, spec)
         self.prefetch_count = prefetch_count
 
+    def get_consumer_tag(self):
+        """Get a unique consumer tag"""
+        if not hasattr(self, '_consumer_tag'):
+            self._consumer_tag = 0
+        self._consumer_tag += 1
+        return str(self._consumer_tag)
+
     def connectionMade(self):
         """Called when a connection has been made."""
         AMQClient.connectionMade(self)
@@ -57,9 +64,6 @@ class AMQPProtocol(AMQClient):
 
     def _authenticated(self, ignore):
         """Called when the connection has been authenticated."""
-
-
-
         # Get a channel.
         d = self.channel(1)
         d.addCallback(self._got_channel)
@@ -76,7 +80,6 @@ class AMQPProtocol(AMQClient):
     @inlineCallbacks
     def _channel_open(self, arg):
         """Called when the channel is open."""
-
         # Flag that the connection is open.
         self.connected = True
 
@@ -134,8 +137,8 @@ class AMQPProtocol(AMQClient):
             exchange_cfg['exchange'] = exchange
         yield self.chan.exchange_declare(**exchange_cfg)
 
-        # Use the exchange name for the consumer tag for now.
-        consumer_tag = exchange_cfg['exchange']
+        # Get a unique consumer tag
+        consumer_tag = self.get_consumer_tag()
 
         # Declare the queue and bind to it.
         queue_cfg = dict(queue_defaults)
