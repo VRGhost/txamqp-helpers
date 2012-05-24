@@ -277,9 +277,9 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
         return sent
 
 
-    def read(self, exchange=None, routing_key=None, callback=None, queue=None, no_ack=True):
+    def read(self, exchange=None, callback=None, routing_key="", queue=None, no_ack=True):
         """Read from an exchange."""
-        assert(exchange != None and routing_key != None and callback != None)
+        assert(exchange != None and callback != None)
 
         # Add this to the read list so that we have it to re-add if we lose the connection.
         self.read_list.append((exchange, routing_key, callback, queue, no_ack))
