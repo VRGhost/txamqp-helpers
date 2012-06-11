@@ -38,10 +38,10 @@ queue_defaults = {
 
 class AMQPProtocol(AMQClient):
     """The protocol is created and destroyed each time a connection is created and lost."""
-    def __init__(self, delegate, vhost, spec, prefetch_count, heartbeat=0, clock=None, insist=False):
+    def __init__(self, delegate, vhost, spec, prefetch_count, heartbeat, clock, insist):
         AMQClient.__init__(self, delegate, vhost, spec, heartbeat, clock, insist)
         self.prefetch_count = prefetch_count
-
+        
     def get_consumer_tag(self):
         """Get a unique consumer tag"""
         if not hasattr(self, '_consumer_tag'):
@@ -80,6 +80,7 @@ class AMQPProtocol(AMQClient):
     @inlineCallbacks
     def _channel_open(self, arg):
         """Called when the channel is open."""
+
         # Flag that the connection is open.
         self.connected = True
 
@@ -215,7 +216,7 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
     protocol = AMQPProtocol
 
 
-    def __init__(self, spec_file=None, vhost=None, host=None, port=None, user=None, password=None, prefetch_count=None):
+    def __init__(self, spec_file=None, vhost=None, host=None, port=None, user=None, password=None, prefetch_count=None, heartbeat=0, clock=None, insist=False):
         spec_file = spec_file or 'amqp0-8.xml'
         self.spec = txamqp.spec.load(spec_file)
         self.user = user or 'guest'
@@ -227,6 +228,9 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
         self.deferred = Deferred()
         self.initial_deferred_fired = False
         self.prefetch_count = prefetch_count
+        self.heartbeat = heartbeat
+        self.clock = clock
+        self.insist = insist
 
         self.p = None # The protocol instance.
         self.client = None # Alias for protocol instance
@@ -239,7 +243,7 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
 
 
     def buildProtocol(self, addr):
-        p = self.protocol(self.delegate, self.vhost, self.spec, self.prefetch_count)
+        p = self.protocol(self.delegate, self.vhost, self.spec, self.prefetch_count, self.heartbeat, self.clock, self.insist)
         p.factory = self # Tell the protocol about this factory.
 
         self.p = p # Store the protocol.
