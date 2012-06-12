@@ -157,6 +157,7 @@ class AMQPProtocol(AMQClient):
         # Now setup the readers.
         d = queue.get()
         d.addCallback(self._read_item, queue, callback, no_ack)
+        d.addErrback(self._read_queue_closed)
         d.addErrback(self._read_item_err)
 
     def _channel_open_failed(self, error):
@@ -200,6 +201,7 @@ class AMQPProtocol(AMQClient):
         # Setup another read of this queue.
         d = queue.get()
         d.addCallback(self._read_item, queue, callback, no_ack)
+        d.addErrback(self._read_queue_closed)
         d.addErrback(self._read_item_err)
 
         # Process the read item by running the callback.
@@ -207,6 +209,9 @@ class AMQPProtocol(AMQClient):
         if not no_ack:
             yield self.chan.basic_ack(item.delivery_tag)
 
+    def _read_queue_closed(self, failure):
+        failure.trap(txamqp.queue.Closed)
+        print "Queue closed"
 
     def _read_item_err(self, error):
         print "Error reading item: ", error
