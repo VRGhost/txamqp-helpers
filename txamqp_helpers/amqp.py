@@ -184,7 +184,7 @@ class AMQPProtocol(AMQClient):
         yield self.chan.exchange_declare(**exchange_cfg)
 
         msg = Content(msg)
-        msg["delivery mode"] = delivery_mode
+        msg["delivery-mode"] = delivery_mode
         d = self.chan.basic_publish(exchange=exchange_cfg['exchange'], routing_key=routing_key, content=msg, immediate=immediate, mandatory=mandatory)
         d.addErrback(self._send_message_err)
 
