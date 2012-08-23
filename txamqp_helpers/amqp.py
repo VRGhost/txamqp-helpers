@@ -221,7 +221,7 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
     protocol = AMQPProtocol
 
 
-    def __init__(self, spec_file=None, vhost=None, host=None, port=None, user=None, password=None, prefetch_count=None, heartbeat=0, clock=None, insist=False):
+    def __init__(self, spec_file=None, vhost=None, host=None, port=None, user=None, password=None, prefetch_count=None, heartbeat=0, clock=None, insist=False, use_ssl=False, contextFactory=None):
         spec_file = spec_file or 'amqp0-8.xml'
         self.spec = txamqp.spec.load(spec_file)
         self.user = user or 'guest'
@@ -244,7 +244,13 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
         self.read_list = [] # List of queues to listen on.
 
         # Make the TCP connection.
-        reactor.connectTCP(self.host, self.port, self)
+        if use_ssl:
+            if contextFactory is None:
+                from twisted.internet import ssl
+                contextFactory = ssl.ClientContextFactory()
+            reactor.connectSSL(self.host, self.port, self, contextFactory)
+        else:
+            reactor.connectTCP(self.host, self.port, self)
 
 
     def buildProtocol(self, addr):
@@ -275,7 +281,7 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
     def send_message(self, exchange=None, msg=None, routing_key="", delivery_mode=2, immediate=False, mandatory=False):
         """Send a message."""
         assert(exchange != None and msg != None)
-        
+
         # Create a deferred to fire when the send completes
         sent = defer.Deferred()
         
