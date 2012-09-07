@@ -25,7 +25,7 @@
 
 from setuptools import setup, find_packages
  
-version = '0.7mjb'
+version = '0.7'
  
 setup(name='txamqp-helpers',
       version=version,
