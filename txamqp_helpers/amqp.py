@@ -121,14 +121,14 @@ class AMQPProtocol(AMQClient):
 
     # Do all the work that configures a listener.
     @inlineCallbacks
-    def setup_read(self, exchange, routing_key, callback, queue=None, no_ack=True):
+    def setup_read(self, exchange, routing_key, callback, queue={}, no_ack=True):
         """This function does the work to read from an exchange."""
-        if not queue:
-            # Use the exchange name as the queue name by default.
+        # Use the exchange name as the queue name by default.
+        if type(queue) == dict and not queue.has_key('queue'):
             if type(exchange) is dict:
-                queue = exchange['exchange']
+                queue['queue'] = exchange['exchange']
             else:
-                queue = exchange
+                queue['queue'] = exchange
 
         # Declare the exchange in case it doesn't exist.
         exchange_cfg = dict(exchange_defaults)
