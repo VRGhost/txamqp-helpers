@@ -15,6 +15,9 @@
 # under the License.
 #
 ##
+
+import logging
+
 from twisted.internet import reactor, defer, protocol
 from twisted.internet.defer import inlineCallbacks, Deferred
 
@@ -22,6 +25,8 @@ from txamqp.protocol import AMQClient
 from txamqp.client import TwistedDelegate
 from txamqp.content import Content
 import txamqp
+
+log = logging.getLogger(__name__)
 
 exchange_defaults = {
     'type' : 'direct',
@@ -161,16 +166,14 @@ class AMQPProtocol(AMQClient):
         d.addErrback(self._read_item_err)
 
     def _channel_open_failed(self, error):
-        print "Channel open failed:", error
-
+        log.error("Channel open failed: {}".format(error))
 
     def _got_channel_failed(self, error):
-        print "Error getting channel:", error
+        log.error("Error getting channel: {}".format(error))
 
 
     def _authentication_failed(self, error):
-        print "AMQP authentication failed:", error
-
+        log.error("AMQP authentication failed: {}".format(error))
 
     @inlineCallbacks
     def _send_message(self, exchange, routing_key, msg, delivery_mode, immediate, mandatory, callback):
@@ -193,7 +196,7 @@ class AMQPProtocol(AMQClient):
 
 
     def _send_message_err(self, error):
-        print "Sending message failed", error
+        log.error("Sending message failed: {}".format(error))
 
     @inlineCallbacks
     def _read_item(self, item, queue, callback, no_ack):
@@ -211,10 +214,10 @@ class AMQPProtocol(AMQClient):
 
     def _read_queue_closed(self, failure):
         failure.trap(txamqp.queue.Closed)
-        print "Queue closed"
+        log.info("Queue closed")
 
     def _read_item_err(self, error):
-        print "Error reading item: ", error
+        log.error("Error reading item: {}".format(error))
 
 
 class AMQPFactory(protocol.ReconnectingClientFactory):
@@ -267,12 +270,12 @@ class AMQPFactory(protocol.ReconnectingClientFactory):
 
 
     def clientConnectionFailed(self, connector, reason):
-        print "Connection failed."
+        log.error("Connection failed.")
         protocol.ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
 
 
     def clientConnectionLost(self, connector, reason):
-        print "Client connection lost."
+        log.error("Client connection lost.")
         self.p = None
 
         protocol.ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
